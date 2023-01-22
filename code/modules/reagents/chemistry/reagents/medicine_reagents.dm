@@ -1866,3 +1866,74 @@
 	M.Jitter(10 SECONDS)
 	M.emote("gasp")
 
+/******ORGAN HEALING******/
+/*Suffix: -rite*/
+/*
+*How this medicine works:
+*Penthrite if you are not in crit only stabilizes your heart.
+*As soon as you pass crit threshold it's special effects kick in. Penthrite forces your heart to beat preventing you from entering
+*soft and hard crit, but there is a catch. During this you will be healed and you will sustain
+*heart damage that will not imapct you as long as penthrite is in your system.
+*If you reach the threshold of -60 HP penthrite stops working and you get a heart attack, penthrite is flushed from your system in that very moment,
+*causing you to loose your soft crit, hard crit and heart stabilization effects.
+*Overdosing on penthrite also causes a heart failure.
+*/
+/datum/reagent/medicine/penthrite
+	name = "Penthrite"
+	description = "An expensive medicine that aids with pumping blood around the body even without a heart, and prevents the heart from slowing down. Mixing it with epinephrine or atropine will cause an explosion."
+	color = "#F5F5F5"
+	overdose_threshold = 50
+
+/atom/movable/screen/alert/penthrite
+	name = "Strong Heartbeat"
+	desc = "Your heart beats with great force!"
+	icon_state = "penthrite"
+
+/datum/reagent/medicine/penthrite/on_mob_metabolize(mob/living/user)
+	. = ..()
+	user.throw_alert("penthrite", /atom/movable/screen/alert/penthrite)
+	ADD_TRAIT(user, TRAIT_STABLEHEART, type)
+	ADD_TRAIT(user, TRAIT_NOHARDCRIT,type)
+	ADD_TRAIT(user, TRAIT_NOSOFTCRIT,type)
+	ADD_TRAIT(user, TRAIT_NOCRITDAMAGE,type)
+
+/datum/reagent/medicine/penthrite/on_mob_life(mob/living/carbon/human/H, delta_time, times_fired)
+	H.adjustOrganLoss(ORGAN_SLOT_STOMACH, 0.25 * REM * delta_time)
+	if(H.health <= HEALTH_THRESHOLD_CRIT && H.health > (H.crit_threshold + HEALTH_THRESHOLD_FULLCRIT * 2)) //we cannot save someone below our lowered crit threshold.
+
+		H.adjustToxLoss(-2 * REM * delta_time, FALSE)
+		H.adjustBruteLoss(-2 * REM * delta_time, FALSE)
+		H.adjustFireLoss(-2 * REM * delta_time, FALSE)
+		H.adjustOxyLoss(-6 * REM * delta_time, FALSE)
+
+		H.losebreath = 0
+
+		H.adjustOrganLoss(ORGAN_SLOT_HEART, max(1, volume/10) * REM * delta_time) // your heart is barely keeping up!
+		
+		H.Jitter(rand(0,2))
+		H.Dizzy(rand(0,2))
+
+		if(DT_PROB(18, delta_time))
+			to_chat(H,span_danger("Your body is trying to give up, but your heart is still beating!"))
+
+	if(H.health <= (H.crit_threshold + HEALTH_THRESHOLD_FULLCRIT * 2)) //certain death below this threshold
+		REMOVE_TRAIT(H, TRAIT_STABLEHEART, type) //we have to remove the stable heart trait before we give them a heart attack
+		to_chat(H,span_danger("You feel something rupturing inside your chest!"))
+		H.emote("scream")
+		H.set_heartattack(TRUE)
+		volume = 0
+	. = ..()
+
+/datum/reagent/medicine/penthrite/on_mob_end_metabolize(mob/living/user)
+	user.clear_alert("penthrite")
+	REMOVE_TRAIT(user, TRAIT_STABLEHEART, type)
+	REMOVE_TRAIT(user, TRAIT_NOHARDCRIT,type)
+	REMOVE_TRAIT(user, TRAIT_NOSOFTCRIT,type)
+	REMOVE_TRAIT(user, TRAIT_NOCRITDAMAGE,type)
+	. = ..()
+
+/datum/reagent/medicine/penthrite/overdose_process(mob/living/carbon/human/H, delta_time, times_fired)
+	REMOVE_TRAIT(H, TRAIT_STABLEHEART, type)
+	H.adjustStaminaLoss(10 * REM * delta_time)
+	H.adjustOrganLoss(ORGAN_SLOT_HEART, 10 * REM * delta_time)
+	H.set_heartattack(TRUE)
